@@ -27,13 +27,18 @@ const generateModelScript = (data, logger, cb, app) => {
 		initPluginConfiguration(data.pluginConfiguration, logger);
 
 		const { containers, externalDefinitions, modelDefinitions, options } = data;
+		const includeFieldSamples = includeFieldSamplesInSchema(options);
 
 		const modelData = data.modelData[0] || {};
 		const scriptType = getScriptType(data, modelData) || SCRIPT_TYPES.CONFLUENT_SCHEMA_REGISTRY;
 		const needMinify = isMinifyNeeded(options);
 
-		const convertedExternalDefinitions = convertSchemaToUserDefinedTypes(externalDefinitions);
-		const convertedModelDefinitions = convertSchemaToUserDefinedTypes(modelDefinitions);
+		const convertedExternalDefinitions = convertSchemaToUserDefinedTypes(
+			externalDefinitions,
+			false,
+			includeFieldSamples,
+		);
+		const convertedModelDefinitions = convertSchemaToUserDefinedTypes(modelDefinitions, false, includeFieldSamples);
 
 		const entities = (containers || [])
 			.flatMap(container => container.entities.map(entityId => getEntityData(container, entityId)))
@@ -53,7 +58,7 @@ const generateModelScript = (data, logger, cb, app) => {
 				clearDefinitions();
 				addDefinitions(convertedExternalDefinitions);
 				addDefinitions(convertedModelDefinitions);
-				setUserDefinedTypes(internalDefinitions, true);
+				setUserDefinedTypes(internalDefinitions, true, includeFieldSamples);
 				addDefinitions(collectionDefinitions);
 				resetDefinitionsUsage();
 
@@ -63,7 +68,7 @@ const generateModelScript = (data, logger, cb, app) => {
 					scriptType,
 					needMinify,
 					settings,
-					avroSchema: convertJsonToAvro(jsonSchema, settings.name),
+					avroSchema: convertJsonToAvro(jsonSchema, settings.name, includeFieldSamples),
 				});
 			} catch (err) {
 				logger.log('error', { message: err.message, stack: err.stack }, 'Avro Forward-Engineering Error');
@@ -101,10 +106,11 @@ const generateScript = (data, logger, cb, app) => {
 			externalDefinitions,
 			modelDefinitions,
 		} = data;
+		const includeFieldSamples = includeFieldSamplesInSchema(options);
 
-		setUserDefinedTypes(externalDefinitions);
-		setUserDefinedTypes(modelDefinitions);
-		setUserDefinedTypes(internalDefinitions, true);
+		setUserDefinedTypes(externalDefinitions, false, includeFieldSamples);
+		setUserDefinedTypes(modelDefinitions, false, includeFieldSamples);
+		setUserDefinedTypes(internalDefinitions, true, includeFieldSamples);
 		resetDefinitionsUsage();
 		const isFromUi = options.origin === 'ui';
 
@@ -121,7 +127,7 @@ const generateScript = (data, logger, cb, app) => {
 			needMinify: isMinifyNeeded(options),
 			isJsonFormat: !isFromUi,
 			settings,
-			avroSchema: convertJsonToAvro(resolvedJsonSchema, settings.name),
+			avroSchema: convertJsonToAvro(resolvedJsonSchema, settings.name, includeFieldSamples),
 		});
 
 		if (!includeSamplesToScript(options)) {
@@ -198,10 +204,10 @@ const getEntityData = (container, entityId) => {
 	return { containerData, jsonSchema, jsonData, entityData, internalDefinitions };
 };
 
-const convertJsonToAvro = (jsonSchema, schemaName) => {
+const convertJsonToAvro = (jsonSchema, schemaName, includeFieldSamples = false) => {
 	jsonSchema = { ...jsonSchema, name: schemaName, type: 'record' };
 	const customProperties = getCustomProperties(getEntityLevelConfig(), jsonSchema);
-	const schema = convertSchema(jsonSchema);
+	const schema = convertSchema(jsonSchema, { includeFieldSample: includeFieldSamples });
 	if (Array.isArray(schema)) {
 		return schema;
 	}
@@ -222,12 +228,13 @@ const convertJsonToAvro = (jsonSchema, schemaName) => {
  *
  * @param {Array<object>} definitions
  * @param {boolean} [resolveReferences]
+ * @param {boolean} [includeFieldSamples]
  */
-const setUserDefinedTypes = (definitions, resolveReferences = false) => {
-	addDefinitions(convertSchemaToUserDefinedTypes(definitions, resolveReferences));
+const setUserDefinedTypes = (definitions, resolveReferences = false, includeFieldSamples = false) => {
+	addDefinitions(convertSchemaToUserDefinedTypes(definitions, resolveReferences, includeFieldSamples));
 };
 
-const convertSchemaToUserDefinedTypes = (definitionsSchema, resolveReferences) => {
+const convertSchemaToUserDefinedTypes = (definitionsSchema, resolveReferences, includeFieldSamples = false) => {
 	definitionsSchema = parseJson(definitionsSchema);
 	const definitions = Object.keys(definitionsSchema.properties || {}).map(key => {
 		const definition = definitionsSchema.properties[key];
@@ -235,7 +242,7 @@ const convertSchemaToUserDefinedTypes = (definitionsSchema, resolveReferences) =
 
 		return {
 			name: prepareName(key),
-			schema: convertSchema(definition),
+			schema: convertSchema(definition, { includeFieldSample: includeFieldSamples }),
 			originalSchema: definition,
 			customProperties,
 		};
@@ -309,6 +316,9 @@ const setPropertyAsLast = key => avroSchema => {
 const includeSamplesToScript = (options = {}) =>
 	!options?.targetScriptOptions?.cliOnly &&
 	(options.additionalOptions || []).find(option => option.id === 'INCLUDE_SAMPLES')?.value;
+
+const includeFieldSamplesInSchema = (options = {}) =>
+	(options.additionalOptions || []).find(option => option.id === 'INCLUDE_FIELD_SAMPLES')?.value;
 
 const getScriptAndSampleResponse = (script, sample) => {
 	return [

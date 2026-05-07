@@ -24,16 +24,9 @@ esbuild
 		outdir: RELEASE_FOLDER_PATH,
 		minify: true,
 		logLevel: 'info',
-		external: ['lodash'],
 		plugins: [
 			clean({
 				patterns: [DEFAULT_RELEASE_FOLDER_PATH],
-			}),
-			copy({
-				assets: {
-					from: [path.join('node_modules', 'lodash', '**', '*')],
-					to: [path.join('node_modules', 'lodash')],
-				},
 			}),
 			copyFolderFiles({
 				fromPath: __dirname,
