@@ -17,7 +17,7 @@ const getTypeFromReference = require('./getTypeFromReference');
 
 const DEFAULT_TYPE = 'string';
 
-const convertSchema = schema => {
+const convertSchema = (schema, options = {}) => {
 	if (isBareUnionSchema(schema)) {
 		return convertBareUnionSchema(schema);
 	}
@@ -33,7 +33,7 @@ const convertSchema = schema => {
 	schema = convertName(schema);
 	schema = convertMetaProperties(schema);
 
-	schema = convertType(schema);
+	schema = convertType(schema, options);
 	schema = filterSchemaAttributes(schema);
 	schema = reorderAttributes(schema);
 	schema = simplifySchema(schema);
@@ -172,9 +172,9 @@ const convertMetaProperties = schema => {
 	};
 };
 
-const convertType = schema => {
+const convertType = (schema, options = {}) => {
 	if (_.isArray(schema.type)) {
-		return convertMultiple(schema);
+		return convertMultiple(schema, options);
 	}
 
 	switch (schema.type) {
@@ -187,15 +187,15 @@ const convertType = schema => {
 		case 'bytes':
 			return convertBytes(schema);
 		case 'map':
-			return convertMap(schema);
+			return convertMap(schema, options);
 		case 'array':
-			return convertArray(schema);
+			return convertArray(schema, options);
 		case 'fixed':
 			return convertFixed(schema);
 		case 'enum':
 			return convertEnum(schema);
 		case 'record':
-			return convertRecord(schema);
+			return convertRecord(schema, options);
 		default: // type is reference
 			return schema;
 	}
@@ -203,11 +203,11 @@ const convertType = schema => {
 
 const filterSchemaAttributes = schema => filterAttributes(schema, schema.type);
 
-const convertMultiple = schema => {
+const convertMultiple = (schema, options = {}) => {
 	const type = filterMultipleTypes(
 		schema.type.map(type => {
 			if (_.isString(type)) {
-				const typeSchema = convertSchema({ ...schema, type });
+				const typeSchema = convertSchema({ ...schema, type }, options);
 				if (_.isString(typeSchema)) {
 					return typeSchema;
 				}
@@ -224,10 +224,13 @@ const convertMultiple = schema => {
 			const fieldType = type.type || getTypeFromReference(type) || DEFAULT_TYPE;
 			const typeAttributes = _.omit({ ...schema, ...type }, GENERAL_ATTRIBUTES);
 
-			return convertSchema({
-				...typeAttributes,
-				type: fieldType,
-			});
+			return convertSchema(
+				{
+					...typeAttributes,
+					type: fieldType,
+				},
+				options,
+			);
 		}),
 	);
 
@@ -263,17 +266,17 @@ const getLogicalTypeProperties = schema => {
 	}
 };
 
-const convertMap = schema => {
+const convertMap = (schema, options = {}) => {
 	return {
 		...schema,
-		values: schema.values ? getValuesSchema(schema.values) : DEFAULT_TYPE,
+		values: schema.values ? getValuesSchema(schema.values, options) : DEFAULT_TYPE,
 	};
 };
 
-const getValuesSchema = properties => {
+const getValuesSchema = (properties, options = {}) => {
 	const schemaName = _.first(Object.keys(properties));
 
-	return convertSchema(properties?.[schemaName] || {});
+	return convertSchema(properties?.[schemaName] || {}, options);
 };
 
 const convertFixed = schema => {
@@ -285,9 +288,9 @@ const convertFixed = schema => {
 	});
 };
 
-const convertArray = schema => {
+const convertArray = (schema, options = {}) => {
 	if (_.isArray(schema.items)) {
-		const items = getUniqueItemsInArray(schema.items.map(item => convertSchema(item)));
+		const items = getUniqueItemsInArray(schema.items.map(item => convertSchema(item, options)));
 		if (items.length === 1) {
 			return {
 				...schema,
@@ -303,15 +306,16 @@ const convertArray = schema => {
 
 	return {
 		...schema,
-		items: convertSchema(schema.items || { type: DEFAULT_TYPE }),
+		items: convertSchema(schema.items || { type: DEFAULT_TYPE }, options),
 	};
 };
 
-const handleField = (name, field) => {
+const handleField = (name, field, options = {}) => {
 	const { description, refDescription, default: __defaultValue, order, aliases, ...schema } = field;
-	const typeSchema = convertSchema(schema);
+	const typeSchema = convertSchema(schema, options);
 	const udt = getUdtItem(typeSchema);
 	const customProperties = getFieldCustomProperties({ schema, udt });
+	const sample = options.includeFieldSample && !_.isUndefined(field.sample) ? { sample: field.sample } : {};
 
 	return resolveFieldDefaultValue(
 		{
@@ -322,6 +326,7 @@ const handleField = (name, field) => {
 			order,
 			aliases,
 			...customProperties,
+			...sample,
 		},
 		typeSchema,
 	);
@@ -386,11 +391,11 @@ const resolveFieldDefaultValue = (field, type) => {
 	};
 };
 
-const convertRecord = schema => {
+const convertRecord = (schema, options = {}) => {
 	return convertNamedType({
 		...schema,
 		name: schema.name || getDefaultName(),
-		fields: Object.keys(schema.fields || {}).map(name => handleField(name, schema.fields[name])),
+		fields: Object.keys(schema.fields || {}).map(name => handleField(name, schema.fields[name], options)),
 	});
 };
 

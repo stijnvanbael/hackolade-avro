@@ -83,6 +83,11 @@
 			"level": {
 				"entity": true
 			}
+		},
+		{
+			"id": "INCLUDE_FIELD_SAMPLES",
+			"value": false,
+			"name": "Include field sample in schema"
 		}
 	],
 	"level": {
