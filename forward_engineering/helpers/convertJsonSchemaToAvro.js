@@ -315,7 +315,8 @@ const handleField = (name, field, options = {}) => {
 	const typeSchema = convertSchema(schema, options);
 	const udt = getUdtItem(typeSchema);
 	const customProperties = getFieldCustomProperties({ schema, udt });
-	const sample = options.includeFieldSample && !_.isUndefined(field.sample) ? { sample: field.sample } : {};
+	const sampleValue = getFieldSampleValue(field, udt);
+	const sample = options.includeFieldSample && !_.isUndefined(sampleValue) ? { sample: sampleValue } : {};
 
 	return resolveFieldDefaultValue(
 		{
@@ -330,6 +331,16 @@ const handleField = (name, field, options = {}) => {
 		},
 		typeSchema,
 	);
+};
+
+const getFieldSampleValue = (field, udt) => {
+	if (!_.isUndefined(field.sample)) {
+		return field.sample;
+	}
+
+	if (field?.$ref && udt?.originalSchema?.type === 'enum') {
+		return udt.originalSchema.sample;
+	}
 };
 
 const getDoc = ({ field, refDescription, description }) => {
