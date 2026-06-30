@@ -269,13 +269,20 @@ const convertSchemaToUserDefinedTypes = (
 		};
 	});
 
-	return definitions.reduce(
-		(result, { name, schema, customProperties, originalSchema }) => ({
+	return definitions.reduce((result, { name, schema, customProperties, originalSchema }) => {
+		// If the converted schema is a string equal to the definition name, the model
+		// definition is an unresolved reference stub (e.g. a polyglot cross-model reference).
+		// Adding it would create a self-referential UDT entry that causes infinite recursion
+		// in resolveUdt. Skip it so the type appears as a forward reference instead.
+		if (_.isString(schema) && schema === name) {
+			return result;
+		}
+
+		return {
 			...result,
 			[name]: { schema: resolveReferences ? resolveSchemaUdt(schema) : schema, customProperties, originalSchema },
-		}),
-		{},
-	);
+		};
+	}, {});
 };
 
 const getScript = ({ settings, scriptType, isJsonFormat, needMinify, avroSchema }) => {

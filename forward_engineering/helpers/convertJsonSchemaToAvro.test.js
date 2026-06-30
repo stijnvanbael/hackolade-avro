@@ -319,6 +319,170 @@ test('shared enum with camelCase key is found when referenced via lowercase $ref
 });
 
 // ============================================================================
+// POLYGLOT / DOCUMENT-TYPE / SELF-REFERENTIAL SCHEMA TESTS
+// ============================================================================
+
+console.log('\n=== Polyglot & Document Type Tests ===\n');
+
+test('type "document" is treated as a record and its fields are preserved', () => {
+	clearDefinitions();
+	resetDefinitionsUsage();
+
+	// Hackolade passes polyglot record definitions with type "document"
+	const schema = {
+		type: 'document',
+		name: 'MyRecord',
+		properties: {
+			myField: { type: 'string' },
+		},
+	};
+
+	const result = convertSchema(schema);
+	assert.strictEqual(result.type, 'record', 'type "document" should be converted to "record"');
+	assert.strictEqual(result.name, 'MyRecord', 'name should be preserved');
+	assert(Array.isArray(result.fields), 'fields should be an array');
+	assert.strictEqual(result.fields.length, 1, 'Should have one field');
+	assert.strictEqual(result.fields[0].name, 'myField', 'Field name should be preserved');
+});
+
+test('field referencing a self-referential UDT entry is present (not absent)', () => {
+	// Simulates what happens when a model definition is an unresolved polyglot reference stub:
+	// convertSchemaToUserDefinedTypes stores schema = "TypeName" (self-referential).
+	clearDefinitions();
+	addDefinitions({
+		LinkedRecord: {
+			schema: {
+				type: 'record',
+				name: 'LinkedRecord',
+				fields: [
+					{ name: 'fieldA', type: 'string' },
+					{ name: 'sharedRef', type: 'UnresolvableType' },
+				],
+			},
+			customProperties: {},
+			originalSchema: {},
+		},
+		// Self-referential: this is what happens when the definition is a reference stub
+		UnresolvableType: {
+			schema: 'UnresolvableType',
+			customProperties: {},
+			originalSchema: { type: 'reference', $ref: '#external/definitions/UnresolvableType' },
+		},
+	});
+	resetDefinitionsUsage();
+
+	const avroSchema = {
+		type: 'record',
+		name: 'Container',
+		fields: [{ name: 'linked', type: 'LinkedRecord' }],
+	};
+
+	const result = resolveUdt(avroSchema);
+	const linkedField = result.fields[0];
+	assert(linkedField, 'Container should have a linked field');
+	const linkedType = linkedField.type;
+	assert(linkedType && linkedType.fields, 'LinkedRecord should have fields');
+
+	// All fields should be present, including sharedRef
+	const fieldNames = linkedType.fields.map(f => f.name);
+	assert(fieldNames.includes('fieldA'), 'fieldA should be present');
+	assert(fieldNames.includes('sharedRef'), 'sharedRef should be present (not silently dropped)');
+	assert.strictEqual(
+		linkedType.fields.find(f => f.name === 'sharedRef').type,
+		'UnresolvableType',
+		'sharedRef type should be a forward reference string',
+	);
+});
+
+test('two entities sharing the same record type both have all their fields', () => {
+	// Regression: when 2 types both reference the same shared record, fields must not disappear.
+	clearDefinitions();
+
+	const sharedRecordSchema = {
+		type: 'record',
+		name: 'SharedRecord',
+		fields: [{ name: 'value', type: 'string' }],
+	};
+
+	addDefinitions({
+		SharedRecord: {
+			schema: sharedRecordSchema,
+			customProperties: {},
+			originalSchema: sharedRecordSchema,
+		},
+	});
+	resetDefinitionsUsage();
+
+	// Entity 1 has a field of type SharedRecord
+	const entity1 = {
+		type: 'record',
+		name: 'Entity1',
+		fields: [{ name: 'shared', type: 'SharedRecord' }],
+	};
+	const result1 = resolveUdt(entity1);
+	const shared1 = result1.fields.find(f => f.name === 'shared');
+	assert(shared1, 'Entity1 should have shared field');
+	assert.strictEqual(shared1.type.type, 'record', 'First use should emit full definition');
+	assert.strictEqual(shared1.type.name, 'SharedRecord');
+
+	// Reset for Entity 2 (simulates new entity pass)
+	clearDefinitions();
+	addDefinitions({
+		SharedRecord: {
+			schema: sharedRecordSchema,
+			customProperties: {},
+			originalSchema: sharedRecordSchema,
+		},
+	});
+	resetDefinitionsUsage();
+
+	// Entity 2 also has a field of type SharedRecord
+	const entity2 = {
+		type: 'record',
+		name: 'Entity2',
+		fields: [{ name: 'shared', type: 'SharedRecord' }],
+	};
+	const result2 = resolveUdt(entity2);
+	const shared2 = result2.fields.find(f => f.name === 'shared');
+	assert(shared2, 'Entity2 should have shared field');
+	assert.strictEqual(shared2.type.type, 'record', 'Entity2 first use should also emit full definition');
+});
+
+test('two fields in same entity sharing the same record type: first is full, second is reference', () => {
+	clearDefinitions();
+
+	const sharedEnumSchema = {
+		type: 'enum',
+		name: 'SharedEnum',
+		symbols: ['A', 'B'],
+	};
+
+	addDefinitions({
+		SharedEnum: {
+			schema: sharedEnumSchema,
+			customProperties: {},
+			originalSchema: sharedEnumSchema,
+		},
+	});
+	resetDefinitionsUsage();
+
+	const avroSchema = {
+		type: 'record',
+		name: 'MyRecord',
+		fields: [
+			{ name: 'first', type: 'SharedEnum' },
+			{ name: 'second', type: 'SharedEnum' },
+		],
+	};
+
+	const result = resolveUdt(avroSchema);
+	assert.strictEqual(result.fields.length, 2, 'Both fields should be present');
+	assert.strictEqual(typeof result.fields[0].type, 'object', 'First use should be full definition');
+	assert.strictEqual(result.fields[0].type.type, 'enum');
+	assert.strictEqual(result.fields[1].type, 'SharedEnum', 'Second use should be a reference string');
+});
+
+// ============================================================================
 // TEST RESULTS
 // ============================================================================
 

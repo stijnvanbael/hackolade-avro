@@ -74,7 +74,9 @@ const convertBareUnionSchema = schema =>
 	);
 
 const getAvroType = type => {
-	if (type === 'object') {
+	// 'object' and 'document' are both used for record types (the latter comes from Hackolade's
+	// polyglot/internal representation of a record field).
+	if (type === 'object' || type === 'document') {
 		return 'record';
 	}
 
