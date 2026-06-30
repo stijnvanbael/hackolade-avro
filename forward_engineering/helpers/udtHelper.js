@@ -102,6 +102,15 @@ const getTypeFromUdt = type => {
 	}
 
 	const { schema, customProperties } = getUdtItem(type) || {};
+
+	// Self-referential schema: the model definition could not be resolved (e.g. a polyglot
+	// reference stub that was converted to its own type name).  Mark it as used and return
+	// the type name directly to prevent infinite recursion.
+	if (_.isString(schema) && schema === type) {
+		useUdt(type);
+		return type;
+	}
+
 	let udtItem = resolveSymbolDefaultValue(schema);
 	udtItem = typeof schema === 'object' && !Array.isArray(schema) ? { ...udtItem, ...customProperties } : schema;
 
