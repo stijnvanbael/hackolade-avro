@@ -55,6 +55,31 @@ const prepareName = name => {
 	return (name || '').replace(VALID_FULL_NAME_REGEX, '_').replace(VALID_FIRST_NAME_LETTER_REGEX, '_');
 };
 
+const splitNameParts = name => {
+	return prepareName(name)
+		.split(/[_\s]+/)
+		.filter(Boolean)
+		.flatMap(part => part.match(/[A-Z]?[a-z0-9]+|[A-Z]+(?![a-z])/g) || [part]);
+};
+
+const toPascalCaseName = name => {
+	const parts = splitNameParts(name);
+	if (!parts.length) {
+		return prepareName(name);
+	}
+
+	return parts.map(part => `${part.charAt(0).toUpperCase()}${part.slice(1).toLowerCase()}`).join('');
+};
+
+const toCamelCaseName = name => {
+	const pascalName = toPascalCaseName(name);
+	if (!pascalName) {
+		return pascalName;
+	}
+
+	return `${pascalName.charAt(0).toLowerCase()}${pascalName.slice(1)}`;
+};
+
 const simplifySchema = schema => {
 	const filteredSchema = Object.keys(schema).reduce((filteredSchema, key) => {
 		if (_.isUndefined(schema[key])) {
@@ -88,7 +113,7 @@ const convertName = schema => {
 		return schema;
 	}
 
-	return { ..._.omit(schema, nameProperties), name: prepareName(schema[nameKey]) };
+	return { ..._.omit(schema, nameProperties), name: toPascalCaseName(schema[nameKey]) };
 };
 
 /**
@@ -131,6 +156,8 @@ module.exports = {
 	reorderAttributes,
 	filterMultipleTypes,
 	prepareName,
+	toPascalCaseName,
+	toCamelCaseName,
 	simplifySchema,
 	getDefaultName,
 	convertName,

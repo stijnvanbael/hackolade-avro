@@ -1,5 +1,5 @@
 const _ = require('lodash');
-const { prepareName } = require('./generalHelper');
+const { toPascalCaseName } = require('./generalHelper');
 
 const getTypeFromReference = schema => {
 	if (!schema.$ref) {
@@ -8,7 +8,7 @@ const getTypeFromReference = schema => {
 
 	if (_.includes(schema.$ref, '#')) {
 		const namespace = schema.namespace || '';
-		const name = prepareName(_.last(schema.$ref.split('/')) || '');
+		const name = toPascalCaseName(_.last(schema.$ref.split('/')) || '');
 
 		return [namespace, name].filter(Boolean).join('.');
 	}

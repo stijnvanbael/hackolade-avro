@@ -4,7 +4,8 @@ const { getUdtItem, convertSchemaToReference, addDefinitions } = require('./udtH
 const {
 	reorderAttributes,
 	filterMultipleTypes,
-	prepareName,
+	toPascalCaseName,
+	toCamelCaseName,
 	simplifySchema,
 	getDefaultName,
 	convertName,
@@ -14,6 +15,7 @@ const convertChoicesToProperties = require('./convertChoicesToProperties');
 const { GENERAL_ATTRIBUTES, META_VALUES_KEY_MAP } = require('../../shared/constants');
 const { getFieldLevelConfig, getCustomProperties, getFieldCustomProperties } = require('../../shared/customProperties');
 const getTypeFromReference = require('./getTypeFromReference');
+const { validateCompleteSchema } = require('./schemaValidator');
 
 const DEFAULT_TYPE = 'string';
 
@@ -320,7 +322,7 @@ const handleField = (name, field, options = {}) => {
 
 	return resolveFieldDefaultValue(
 		{
-			name: prepareName(name),
+			name: toCamelCaseName(name),
 			type: _.isArray(typeSchema.type) ? typeSchema.type : typeSchema,
 			default: getDefaultValue(field, udt, typeSchema),
 			doc: getDoc({ field, refDescription, description }),
@@ -405,7 +407,7 @@ const resolveFieldDefaultValue = (field, type) => {
 const convertRecord = (schema, options = {}) => {
 	return convertNamedType({
 		...schema,
-		name: schema.name || getDefaultName(),
+		name: toPascalCaseName(schema.name || getDefaultName()),
 		fields: Object.keys(schema.fields || {}).map(name => handleField(name, schema.fields[name], options)),
 	});
 };
@@ -440,7 +442,8 @@ const convertRecord = (schema, options = {}) => {
  * @returns {Object}
  */
 const convertNamedType = (schema, schemaTypeKeysMap = {}) => {
-	const name = schema.name;
+	const name = toPascalCaseName(schema.name || getDefaultName());
+	schema = { ...schema, name };
 	const schemaFromUdt = getUdtItem(name);
 	const isAlreadyDefined = schemaFromUdt && !schemaFromUdt.isCollectionReference;
 	const schemaTypeSpecificKeys = Object.keys(schemaTypeKeysMap);
@@ -477,7 +480,10 @@ const convertPrimitive = schema => {
 };
 
 const convertEnum = schema => {
-	return convertNamedType({ ...schema, name: schema.name || getDefaultName() }, { symbolDefault: 'default' });
+	return convertNamedType(
+		{ ...schema, name: toPascalCaseName(schema.name || getDefaultName()) },
+		{ symbolDefault: 'default' },
+	);
 };
 
 const convertNumber = schema => {
@@ -525,4 +531,27 @@ const getMetaProperties = metaProperties => {
 	}, {});
 };
 
+/**
+ * Validates a schema and throws an error if validation fails and sanity checks are enabled
+ * @param {Object} schema - The Avro schema to validate
+ * @param {Object} allDefinitions - All named type definitions
+ * @param {Object} options - Options including enableSanityChecks flag
+ * @throws {Error} If sanity checks fail
+ */
+const validateSchemaOrThrow = (schema, allDefinitions = {}, options = {}) => {
+	const shouldValidate = options.enableSanityChecks !== false; // default true
+
+	if (!shouldValidate) {
+		return;
+	}
+
+	const validationErrors = validateCompleteSchema(schema, allDefinitions);
+
+	if (validationErrors.length > 0) {
+		throw new Error(`Schema validation failed with the following errors:\n${validationErrors.join('\n')}`);
+	}
+};
+
 module.exports = convertSchema;
+module.exports.validateSchemaOrThrow = validateSchemaOrThrow;
+module.exports.validateCompleteSchema = validateCompleteSchema; // Re-export from schemaValidator

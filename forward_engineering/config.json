@@ -88,6 +88,12 @@
 			"id": "INCLUDE_FIELD_SAMPLES",
 			"value": false,
 			"name": "Include field sample in schema"
+		},
+		{
+			"id": "enableSanityChecks",
+			"value": true,
+			"name": "Enable naming sanity checks",
+			"description": "Verify records/enums are PascalCase, fields are camelCase, enum constants are SCREAMING_CASE"
 		}
 	],
 	"level": {
