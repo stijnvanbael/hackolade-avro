@@ -1,6 +1,6 @@
 const _ = require('lodash');
 const { SCRIPT_TYPES, SCHEMA_REGISTRIES_KEYS } = require('../shared/constants');
-const { parseJson, prepareName } = require('./helpers/generalHelper');
+const { parseJson, toPascalCaseName } = require('./helpers/generalHelper');
 const validateAvroScript = require('./helpers/validateAvroScript');
 const { formatAvroSchemaByType, getConfluentSubjectName } = require('./helpers/formatAvroSchemaByType');
 const {
@@ -28,6 +28,7 @@ const generateModelScript = (data, logger, cb, app) => {
 
 		const { containers, externalDefinitions, modelDefinitions, options } = data;
 		const includeFieldSamples = includeFieldSamplesInSchema(options);
+		const enableSanityChecks = getSanityChecksEnabled(options);
 
 		const modelData = data.modelData[0] || {};
 		const scriptType = getScriptType(data, modelData) || SCRIPT_TYPES.CONFLUENT_SCHEMA_REGISTRY;
@@ -37,8 +38,14 @@ const generateModelScript = (data, logger, cb, app) => {
 			externalDefinitions,
 			false,
 			includeFieldSamples,
+			enableSanityChecks,
 		);
-		const convertedModelDefinitions = convertSchemaToUserDefinedTypes(modelDefinitions, false, includeFieldSamples);
+		const convertedModelDefinitions = convertSchemaToUserDefinedTypes(
+			modelDefinitions,
+			false,
+			includeFieldSamples,
+			enableSanityChecks,
+		);
 
 		const entities = (containers || [])
 			.flatMap(container => container.entities.map(entityId => getEntityData(container, entityId)))
@@ -52,28 +59,23 @@ const generateModelScript = (data, logger, cb, app) => {
 		const collectionDefinitions = getDefinitionsOfCollectionReferences();
 
 		const script = entitiesWithHandledCollectionReferences.map(entity => {
-			try {
-				const { containerData, entityData, jsonSchema, internalDefinitions, references } = entity;
+			const { containerData, entityData, jsonSchema, internalDefinitions, references } = entity;
 
-				clearDefinitions();
-				addDefinitions(convertedExternalDefinitions);
-				addDefinitions(convertedModelDefinitions);
-				setUserDefinedTypes(internalDefinitions, true, includeFieldSamples);
-				addDefinitions(collectionDefinitions);
-				resetDefinitionsUsage();
+			clearDefinitions();
+			addDefinitions(convertedExternalDefinitions);
+			addDefinitions(convertedModelDefinitions);
+			setUserDefinedTypes(internalDefinitions, true, includeFieldSamples, enableSanityChecks);
+			addDefinitions(collectionDefinitions);
+			resetDefinitionsUsage();
 
-				const settings = getSettings({ containerData, entityData, modelData, references });
+			const settings = getSettings({ containerData, entityData, modelData, references });
 
-				return getScript({
-					scriptType,
-					needMinify,
-					settings,
-					avroSchema: convertJsonToAvro(jsonSchema, settings.name, includeFieldSamples),
-				});
-			} catch (err) {
-				logger.log('error', { message: err.message, stack: err.stack }, 'Avro Forward-Engineering Error');
-				return '';
-			}
+			return getScript({
+				scriptType,
+				needMinify,
+				settings,
+				avroSchema: convertJsonToAvro(jsonSchema, settings.name, includeFieldSamples, options),
+			});
 		});
 
 		const jsonData = combineJsonData(data.containers);
@@ -86,7 +88,7 @@ const generateModelScript = (data, logger, cb, app) => {
 		return cb(null, getScriptAndSampleResponse(resultScript, jsonData));
 	} catch (err) {
 		logger.log('error', { message: err.message, stack: err.stack }, 'Avro model Forward-Engineering Error');
-		cb({ message: err.message, stack: err.stack });
+		cb(toForwardEngineeringError(err, 'Avro model Forward-Engineering Error'));
 	}
 };
 
@@ -107,10 +109,11 @@ const generateScript = (data, logger, cb, app) => {
 			modelDefinitions,
 		} = data;
 		const includeFieldSamples = includeFieldSamplesInSchema(options);
+		const enableSanityChecks = getSanityChecksEnabled(options);
 
-		setUserDefinedTypes(externalDefinitions, false, includeFieldSamples);
-		setUserDefinedTypes(modelDefinitions, false, includeFieldSamples);
-		setUserDefinedTypes(internalDefinitions, true, includeFieldSamples);
+		setUserDefinedTypes(externalDefinitions, false, includeFieldSamples, enableSanityChecks);
+		setUserDefinedTypes(modelDefinitions, false, includeFieldSamples, enableSanityChecks);
+		setUserDefinedTypes(internalDefinitions, true, includeFieldSamples, enableSanityChecks);
 		resetDefinitionsUsage();
 		const isFromUi = options.origin === 'ui';
 
@@ -127,7 +130,7 @@ const generateScript = (data, logger, cb, app) => {
 			needMinify: isMinifyNeeded(options),
 			isJsonFormat: !isFromUi,
 			settings,
-			avroSchema: convertJsonToAvro(resolvedJsonSchema, settings.name, includeFieldSamples),
+			avroSchema: convertJsonToAvro(resolvedJsonSchema, settings.name, includeFieldSamples, options),
 		});
 
 		if (!includeSamplesToScript(options)) {
@@ -157,7 +160,7 @@ const generateScript = (data, logger, cb, app) => {
 		return cb(null, getScriptAndSampleResponse(script, data.jsonData));
 	} catch (err) {
 		logger.log('error', { message: err.message, stack: err.stack }, 'Avro Forward-Engineering Error');
-		cb({ message: err.message, stack: err.stack });
+		cb(toForwardEngineeringError(err, 'Avro Forward-Engineering Error'));
 	}
 };
 
@@ -204,10 +207,13 @@ const getEntityData = (container, entityId) => {
 	return { containerData, jsonSchema, jsonData, entityData, internalDefinitions };
 };
 
-const convertJsonToAvro = (jsonSchema, schemaName, includeFieldSamples = false) => {
+const convertJsonToAvro = (jsonSchema, schemaName, includeFieldSamples = false, options = {}) => {
 	jsonSchema = { ...jsonSchema, name: schemaName, type: 'record' };
 	const customProperties = getCustomProperties(getEntityLevelConfig(), jsonSchema);
-	const schema = convertSchema(jsonSchema, { includeFieldSample: includeFieldSamples });
+	const schema = convertSchema(jsonSchema, {
+		includeFieldSample: includeFieldSamples,
+		enableSanityChecks: getSanityChecksEnabled(options),
+	});
 	if (Array.isArray(schema)) {
 		return schema;
 	}
@@ -230,19 +236,34 @@ const convertJsonToAvro = (jsonSchema, schemaName, includeFieldSamples = false) 
  * @param {boolean} [resolveReferences]
  * @param {boolean} [includeFieldSamples]
  */
-const setUserDefinedTypes = (definitions, resolveReferences = false, includeFieldSamples = false) => {
-	addDefinitions(convertSchemaToUserDefinedTypes(definitions, resolveReferences, includeFieldSamples));
+const setUserDefinedTypes = (
+	definitions,
+	resolveReferences = false,
+	includeFieldSamples = false,
+	enableSanityChecks = true,
+) => {
+	addDefinitions(
+		convertSchemaToUserDefinedTypes(definitions, resolveReferences, includeFieldSamples, enableSanityChecks),
+	);
 };
 
-const convertSchemaToUserDefinedTypes = (definitionsSchema, resolveReferences, includeFieldSamples = false) => {
+const convertSchemaToUserDefinedTypes = (
+	definitionsSchema,
+	resolveReferences,
+	includeFieldSamples = false,
+	enableSanityChecks = true,
+) => {
 	definitionsSchema = parseJson(definitionsSchema);
 	const definitions = Object.keys(definitionsSchema.properties || {}).map(key => {
 		const definition = definitionsSchema.properties[key];
 		const customProperties = getCustomProperties(getFieldLevelConfig(definition.type), definition);
 
 		return {
-			name: prepareName(key),
-			schema: convertSchema(definition, { includeFieldSample: includeFieldSamples }),
+			name: toPascalCaseName(key),
+			schema: convertSchema(definition, {
+				includeFieldSample: includeFieldSamples,
+				enableSanityChecks,
+			}),
 			originalSchema: definition,
 			customProperties,
 		};
@@ -305,7 +326,20 @@ const isResolveNamespaceReferenceNeeded = options => {
 	return additionalOptions.find(option => option.id === 'resolveEntityReferences')?.value;
 };
 
-const getRootRecordName = entityData => prepareName(entityData.code || entityData.name || entityData.collectionName);
+const getSanityChecksEnabled = (options = {}) => {
+	const additionalOptions = options?.additionalOptions || [];
+
+	return additionalOptions.find(option => option.id === 'enableSanityChecks')?.value !== false;
+};
+
+const toForwardEngineeringError = (err, title) => ({
+	title,
+	message: err.message,
+	stack: err.stack,
+});
+
+const getRootRecordName = entityData =>
+	toPascalCaseName(entityData.code || entityData.name || entityData.collectionName);
 
 const reorderAvroSchema = avroSchema => setPropertyAsLast('fields')(avroSchema);
 

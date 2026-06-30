@@ -2,10 +2,15 @@ const _ = require('lodash');
 const { isNamedType, filterAttributes } = require('../../shared/typeHelper');
 const { AVRO_TYPES, SCRIPT_TYPES } = require('../../shared/constants');
 const mapJsonSchema = require('../../shared/mapJsonSchema');
-const { reorderAttributes, simplifySchema, getExternalDefinitionBucketName } = require('./generalHelper');
+const {
+	reorderAttributes,
+	simplifySchema,
+	getExternalDefinitionBucketName,
+	toPascalCaseName,
+	prepareName,
+} = require('./generalHelper');
 const mapAvroSchema = require('./mapAvroSchema');
 const { getConfluentSubjectName } = require('./formatAvroSchemaByType');
-const { prepareName } = require('./generalHelper');
 
 let udt = {};
 
@@ -202,7 +207,7 @@ const convertCollectionReferences = (entities, options) => {
 			} else {
 				definition = entities.find(entity => entity.jsonSchema.GUID === field.ref).jsonSchema;
 			}
-			const definitionName = prepareName(
+			const definitionName = toPascalCaseName(
 				definition.code || definition.collectionName || definition.name || field.parentCollectionName,
 			);
 			const namespace = definition.bucketName || field.parentBucketName;
