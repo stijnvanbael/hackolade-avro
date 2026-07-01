@@ -93,7 +93,7 @@
 			"id": "sanitizeNames",
 			"value": true,
 			"name": "Sanitize names",
-			"description": "Automatically convert record/enum names to PascalCase, fields to camelCase, and enum constants to UPPER_SNAKE_CASE"
+			"description": "Automatically convert record/enum names to PascalCase and fields to camelCase. Enum constants are kept as provided."
 		}
 	],
 	"level": {

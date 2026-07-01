@@ -4,13 +4,7 @@
  */
 
 const assert = require('assert');
-const {
-	toUpperSnakeCaseName,
-	sanitizeTypeName,
-	sanitizeFieldName,
-	sanitizeEnumConstant,
-	sanitizeSchema,
-} = require('./sanitizationHelper');
+const { sanitizeTypeName, sanitizeFieldName, sanitizeSchema } = require('./sanitizationHelper');
 
 const TEST_RESULTS = {
 	passed: 0,
@@ -30,47 +24,6 @@ function test(description, testFn) {
 		console.error(`  ${error.message}`);
 	}
 }
-
-// ============================================================================
-// ENUM CONSTANT CONVERSION TESTS
-// ============================================================================
-
-console.log('\n=== Enum Constant Conversion Tests ===\n');
-
-test('toUpperSnakeCaseName: converts camelCase to UPPER_SNAKE_CASE', () => {
-	assert.strictEqual(toUpperSnakeCaseName('myConstant'), 'MY_CONSTANT');
-	assert.strictEqual(toUpperSnakeCaseName('firstName'), 'FIRST_NAME');
-	assert.strictEqual(toUpperSnakeCaseName('apiKey'), 'API_KEY');
-});
-
-test('toUpperSnakeCaseName: converts PascalCase to UPPER_SNAKE_CASE', () => {
-	assert.strictEqual(toUpperSnakeCaseName('MyConstant'), 'MY_CONSTANT');
-	assert.strictEqual(toUpperSnakeCaseName('FirstName'), 'FIRST_NAME');
-	assert.strictEqual(toUpperSnakeCaseName('APIKey'), 'API_KEY');
-});
-
-test('toUpperSnakeCaseName: converts snake_case to UPPER_SNAKE_CASE', () => {
-	assert.strictEqual(toUpperSnakeCaseName('my_constant'), 'MY_CONSTANT');
-	assert.strictEqual(toUpperSnakeCaseName('first_name'), 'FIRST_NAME');
-});
-
-test('toUpperSnakeCaseName: removes non-alphanumeric characters', () => {
-	assert.strictEqual(toUpperSnakeCaseName('my-constant'), 'MY_CONSTANT');
-	assert.strictEqual(toUpperSnakeCaseName('my.constant'), 'MY_CONSTANT');
-	assert.strictEqual(toUpperSnakeCaseName('my constant'), 'MY_CONSTANT');
-});
-
-test('toUpperSnakeCaseName: handles numeric values', () => {
-	assert.strictEqual(toUpperSnakeCaseName('value123'), 'VALUE_123');
-	// When numeric starts are encountered, the prefix underscore behavior varies
-	const result = toUpperSnakeCaseName('_1numeric');
-	assert(result === '_1_NUMERIC' || result === '1_NUMERIC', `Unexpected result: ${result}`);
-});
-
-test('sanitizeEnumConstant: sanitizes enum constants', () => {
-	assert.strictEqual(sanitizeEnumConstant('mySymbol'), 'MY_SYMBOL');
-	assert.strictEqual(sanitizeEnumConstant('ALREADY_VALID'), 'ALREADY_VALID');
-});
 
 // ============================================================================
 // TYPE NAME SANITIZATION TESTS
@@ -139,18 +92,20 @@ test('sanitizeSchema: sanitizes record name and field names', () => {
 	assert.strictEqual(sanitized.fields[1].name, 'anotherField');
 });
 
-test('sanitizeSchema: sanitizes enum name and symbols', () => {
+test('sanitizeSchema: sanitizes enum name and preserves symbols', () => {
 	const schema = {
 		type: 'enum',
 		name: 'my_enum',
-		symbols: ['mySymbol', 'another_symbol'],
+		symbols: ['mySymbol', 'another_symbol', 'E17', '_23'],
 	};
 
 	const sanitized = sanitizeSchema(schema);
 
 	assert.strictEqual(sanitized.name, 'MyEnum');
-	assert.strictEqual(sanitized.symbols[0], 'MY_SYMBOL');
-	assert.strictEqual(sanitized.symbols[1], 'ANOTHER_SYMBOL');
+	assert.strictEqual(sanitized.symbols[0], 'mySymbol');
+	assert.strictEqual(sanitized.symbols[1], 'another_symbol');
+	assert.strictEqual(sanitized.symbols[2], 'E17');
+	assert.strictEqual(sanitized.symbols[3], '_23');
 });
 
 test('sanitizeSchema: sanitizes fixed name', () => {
@@ -200,14 +155,14 @@ test('sanitizeSchema: recursively sanitizes map values', () => {
 
 test('sanitizeSchema: sanitizes union types', () => {
 	const schema = {
-		type: ['null', { type: 'enum', name: 'my_enum', symbols: ['value1'] }],
+		type: ['null', { type: 'enum', name: 'my_enum', symbols: ['value1', 'E17', '_23'] }],
 	};
 
 	const sanitized = sanitizeSchema(schema);
 
 	assert(Array.isArray(sanitized.type));
 	assert.strictEqual(sanitized.type[1].name, 'MyEnum');
-	assert.strictEqual(sanitized.type[1].symbols[0], 'VALUE_1');
+	assert.deepStrictEqual(sanitized.type[1].symbols, ['value1', 'E17', '_23']);
 });
 
 test('sanitizeSchema: handles special characters in names', () => {
