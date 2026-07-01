@@ -28,7 +28,7 @@ const generateModelScript = (data, logger, cb, app) => {
 
 		const { containers, externalDefinitions, modelDefinitions, options } = data;
 		const includeFieldSamples = includeFieldSamplesInSchema(options);
-		const enableSanityChecks = getSanityChecksEnabled(options);
+		const sanitizeNames = getSanitizeNamesEnabled(options);
 
 		const modelData = data.modelData[0] || {};
 		const scriptType = getScriptType(data, modelData) || SCRIPT_TYPES.CONFLUENT_SCHEMA_REGISTRY;
@@ -38,13 +38,13 @@ const generateModelScript = (data, logger, cb, app) => {
 			externalDefinitions,
 			false,
 			includeFieldSamples,
-			enableSanityChecks,
+			sanitizeNames,
 		);
 		const convertedModelDefinitions = convertSchemaToUserDefinedTypes(
 			modelDefinitions,
 			false,
 			includeFieldSamples,
-			enableSanityChecks,
+			sanitizeNames,
 		);
 
 		const entities = (containers || [])
@@ -64,7 +64,7 @@ const generateModelScript = (data, logger, cb, app) => {
 			clearDefinitions();
 			addDefinitions(convertedExternalDefinitions);
 			addDefinitions(convertedModelDefinitions);
-			setUserDefinedTypes(internalDefinitions, true, includeFieldSamples, enableSanityChecks);
+			setUserDefinedTypes(internalDefinitions, true, includeFieldSamples, sanitizeNames);
 			addDefinitions(collectionDefinitions);
 			resetDefinitionsUsage();
 
@@ -109,11 +109,11 @@ const generateScript = (data, logger, cb, app) => {
 			modelDefinitions,
 		} = data;
 		const includeFieldSamples = includeFieldSamplesInSchema(options);
-		const enableSanityChecks = getSanityChecksEnabled(options);
+		const sanitizeNames = getSanitizeNamesEnabled(options);
 
-		setUserDefinedTypes(externalDefinitions, false, includeFieldSamples, enableSanityChecks);
-		setUserDefinedTypes(modelDefinitions, false, includeFieldSamples, enableSanityChecks);
-		setUserDefinedTypes(internalDefinitions, true, includeFieldSamples, enableSanityChecks);
+		setUserDefinedTypes(externalDefinitions, false, includeFieldSamples, sanitizeNames);
+		setUserDefinedTypes(modelDefinitions, false, includeFieldSamples, sanitizeNames);
+		setUserDefinedTypes(internalDefinitions, true, includeFieldSamples, sanitizeNames);
 		resetDefinitionsUsage();
 		const isFromUi = options.origin === 'ui';
 
@@ -212,7 +212,7 @@ const convertJsonToAvro = (jsonSchema, schemaName, includeFieldSamples = false, 
 	const customProperties = getCustomProperties(getEntityLevelConfig(), jsonSchema);
 	const schema = convertSchema(jsonSchema, {
 		includeFieldSample: includeFieldSamples,
-		enableSanityChecks: getSanityChecksEnabled(options),
+		sanitizeNames: getSanitizeNamesEnabled(options),
 	});
 	if (Array.isArray(schema)) {
 		return schema;
@@ -240,18 +240,16 @@ const setUserDefinedTypes = (
 	definitions,
 	resolveReferences = false,
 	includeFieldSamples = false,
-	enableSanityChecks = true,
+	sanitizeNames = true,
 ) => {
-	addDefinitions(
-		convertSchemaToUserDefinedTypes(definitions, resolveReferences, includeFieldSamples, enableSanityChecks),
-	);
+	addDefinitions(convertSchemaToUserDefinedTypes(definitions, resolveReferences, includeFieldSamples, sanitizeNames));
 };
 
 const convertSchemaToUserDefinedTypes = (
 	definitionsSchema,
 	resolveReferences,
 	includeFieldSamples = false,
-	enableSanityChecks = true,
+	sanitizeNames = true,
 ) => {
 	definitionsSchema = parseJson(definitionsSchema);
 	const definitions = Object.keys(definitionsSchema.properties || {}).map(key => {
@@ -262,7 +260,7 @@ const convertSchemaToUserDefinedTypes = (
 			name: toPascalCaseName(key),
 			schema: convertSchema(definition, {
 				includeFieldSample: includeFieldSamples,
-				enableSanityChecks,
+				sanitizeNames,
 			}),
 			originalSchema: definition,
 			customProperties,
@@ -333,10 +331,10 @@ const isResolveNamespaceReferenceNeeded = options => {
 	return additionalOptions.find(option => option.id === 'resolveEntityReferences')?.value;
 };
 
-const getSanityChecksEnabled = (options = {}) => {
+const getSanitizeNamesEnabled = (options = {}) => {
 	const additionalOptions = options?.additionalOptions || [];
 
-	return additionalOptions.find(option => option.id === 'enableSanityChecks')?.value !== false;
+	return additionalOptions.find(option => option.id === 'sanitizeNames')?.value !== false;
 };
 
 const toForwardEngineeringError = (err, title) => ({

@@ -90,10 +90,10 @@
 			"name": "Include field sample in schema"
 		},
 		{
-			"id": "enableSanityChecks",
+			"id": "sanitizeNames",
 			"value": true,
-			"name": "Enable naming sanity checks",
-			"description": "Verify records/enums are PascalCase, fields are camelCase, enum constants are SCREAMING_CASE"
+			"name": "Sanitize names",
+			"description": "Automatically convert record/enum names to PascalCase, fields to camelCase, and enum constants to UPPER_SNAKE_CASE"
 		}
 	],
 	"level": {
