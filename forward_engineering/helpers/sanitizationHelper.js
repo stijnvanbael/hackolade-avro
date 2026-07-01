@@ -1,33 +1,4 @@
-const _ = require('lodash');
 const { toPascalCaseName, toCamelCaseName } = require('./generalHelper');
-
-/**
- * Converts a string to UPPER_SNAKE_CASE
- * Handles numeric constants that can start with underscore
- * @param {string} name - The string to convert
- * @returns {string} - The converted string in UPPER_SNAKE_CASE
- */
-const toUpperSnakeCaseName = name => {
-	if (!name) {
-		return name;
-	}
-
-	// Remove non-alphanumeric characters (except leading underscore for numeric constants)
-	let cleaned = name.replace(/[^a-zA-Z0-9_]/g, '_');
-
-	// Split on underscores and case changes
-	const parts = cleaned
-		.split(/[_]+/)
-		.filter(Boolean)
-		.flatMap(part => {
-			// Split on case changes: aB -> a, B
-			return part.match(/[A-Z]+(?=[A-Z][a-z]|\b|_)|[A-Z]?[a-z]+|[0-9]+/g) || [part];
-		})
-		.filter(Boolean);
-
-	// Join with underscores and convert to uppercase
-	return parts.map(part => part.toUpperCase()).join('_');
-};
 
 /**
  * Sanitizes record and enum names to PascalCase
@@ -57,19 +28,6 @@ const sanitizeFieldName = name => {
 
 	// Use existing toCamelCaseName which already handles most cases
 	return toCamelCaseName(name);
-};
-
-/**
- * Sanitizes enum constant to UPPER_SNAKE_CASE
- * @param {string} symbol - The enum constant to sanitize
- * @returns {string} - The sanitized constant
- */
-const sanitizeEnumConstant = symbol => {
-	if (!symbol) {
-		return symbol;
-	}
-
-	return toUpperSnakeCaseName(symbol);
 };
 
 /**
@@ -104,14 +62,9 @@ const sanitizeSchema = (schema, isFieldContext = false) => {
 		}
 	}
 
-	// Sanitize enum names and symbols
+	// Sanitize enum names. Symbols must stay as provided by the source schema.
 	if (sanitized.type === 'enum' && sanitized.name) {
 		sanitized.name = sanitizeTypeName(sanitized.name);
-
-		// Sanitize enum symbols (constants)
-		if (sanitized.symbols && Array.isArray(sanitized.symbols)) {
-			sanitized.symbols = sanitized.symbols.map(symbol => sanitizeEnumConstant(symbol));
-		}
 	}
 
 	// Sanitize fixed names
@@ -138,9 +91,7 @@ const sanitizeSchema = (schema, isFieldContext = false) => {
 };
 
 module.exports = {
-	toUpperSnakeCaseName,
 	sanitizeTypeName,
 	sanitizeFieldName,
-	sanitizeEnumConstant,
 	sanitizeSchema,
 };

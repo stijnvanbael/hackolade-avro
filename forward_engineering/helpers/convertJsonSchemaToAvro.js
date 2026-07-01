@@ -11,7 +11,7 @@ const {
 	convertName,
 	compareSchemasByStructure,
 } = require('./generalHelper');
-const { sanitizeSchema, sanitizeEnumConstant } = require('./sanitizationHelper');
+const { sanitizeSchema } = require('./sanitizationHelper');
 const convertChoicesToProperties = require('./convertChoicesToProperties');
 const { GENERAL_ATTRIBUTES, META_VALUES_KEY_MAP } = require('../../shared/constants');
 const { getFieldLevelConfig, getCustomProperties, getFieldCustomProperties } = require('../../shared/customProperties');
