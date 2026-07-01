@@ -11,6 +11,7 @@ const {
 	convertName,
 	compareSchemasByStructure,
 } = require('./generalHelper');
+const { sanitizeSchema, sanitizeEnumConstant } = require('./sanitizationHelper');
 const convertChoicesToProperties = require('./convertChoicesToProperties');
 const { GENERAL_ATTRIBUTES, META_VALUES_KEY_MAP } = require('../../shared/constants');
 const { getFieldLevelConfig, getCustomProperties, getFieldCustomProperties } = require('../../shared/customProperties');
@@ -39,6 +40,11 @@ const convertSchema = (schema, options = {}) => {
 	schema = filterSchemaAttributes(schema);
 	schema = reorderAttributes(schema);
 	schema = simplifySchema(schema);
+
+	// Apply sanitization if enabled
+	if (options.sanitizeNames) {
+		schema = sanitizeSchema(schema);
+	}
 
 	return schema;
 };
