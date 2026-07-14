@@ -319,22 +319,57 @@ const handleCollectionReferences = (entities, options) => {
 	return convertCollectionReferences(entities, options);
 };
 
-const isMinifyNeeded = options => {
-	const additionalOptions = options?.additionalOptions || [];
+const normalizeOptionId = id => String(id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-	return additionalOptions.find(option => option.id === 'minify')?.value;
+const toBooleanOptionValue = value => {
+	if (_.isString(value)) {
+		const normalizedValue = value.trim().toLowerCase();
+		if (normalizedValue === 'true') {
+			return true;
+		}
+		if (normalizedValue === 'false') {
+			return false;
+		}
+	}
+
+	return value;
+};
+
+const getAdditionalOptionValue = (options = {}, optionId, defaultValue) => {
+	const additionalOptions = options?.additionalOptions;
+	const normalizedOptionId = normalizeOptionId(optionId);
+
+	if (_.isArray(additionalOptions)) {
+		const option = additionalOptions.find(option => normalizeOptionId(option?.id) === normalizedOptionId);
+
+		if (option) {
+			return toBooleanOptionValue(option.value);
+		}
+	}
+
+	if (_.isPlainObject(additionalOptions)) {
+		const matchedKey = Object.keys(additionalOptions).find(
+			optionKey => normalizeOptionId(optionKey) === normalizedOptionId,
+		);
+
+		if (matchedKey) {
+			return toBooleanOptionValue(additionalOptions[matchedKey]);
+		}
+	}
+
+	return defaultValue;
+};
+
+const isMinifyNeeded = options => {
+	return getAdditionalOptionValue(options, 'minify', false);
 };
 
 const isResolveNamespaceReferenceNeeded = options => {
-	const additionalOptions = options?.additionalOptions || [];
-
-	return additionalOptions.find(option => option.id === 'resolveEntityReferences')?.value;
+	return getAdditionalOptionValue(options, 'resolveEntityReferences', false);
 };
 
 const getSanitizeNamesEnabled = (options = {}) => {
-	const additionalOptions = options?.additionalOptions || [];
-
-	return additionalOptions.find(option => option.id === 'sanitizeNames')?.value !== false;
+	return getAdditionalOptionValue(options, 'sanitizeNames', true) !== false;
 };
 
 const toForwardEngineeringError = (err, title) => ({
@@ -354,10 +389,10 @@ const setPropertyAsLast = key => avroSchema => {
 
 const includeSamplesToScript = (options = {}) =>
 	!options?.targetScriptOptions?.cliOnly &&
-	(options.additionalOptions || []).find(option => option.id === 'INCLUDE_SAMPLES')?.value;
+	getAdditionalOptionValue(options, 'INCLUDE_SAMPLES', false);
 
 const includeFieldSamplesInSchema = (options = {}) =>
-	(options.additionalOptions || []).find(option => option.id === 'INCLUDE_FIELD_SAMPLES')?.value;
+	getAdditionalOptionValue(options, 'INCLUDE_FIELD_SAMPLES', true) !== false;
 
 const getScriptAndSampleResponse = (script, sample) => {
 	return [
@@ -381,4 +416,9 @@ module.exports = {
 	generateModelScript,
 	generateScript,
 	validate,
+	// Expose option resolvers for focused unit tests.
+	_test: {
+		includeFieldSamplesInSchema,
+		getAdditionalOptionValue,
+	},
 };

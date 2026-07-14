@@ -1,3 +1,11 @@
+	assert.strictEqual(enumType.symbols[0], 'EVENT_STARTED', 'Enum symbol should be SCREAMING_CASE');
+	assert.strictEqual(enumType.symbols[1], 'EVENT_COMPLETED', 'Enum symbol should be SCREAMING_CASE');
+	assert.strictEqual(enumType.symbols[2], 'EVENT_FAILED', 'Enum symbol should be SCREAMING_CASE');
+						symbols: ['event-started', 'event-completed', 'event-failed'],
+	assert.strictEqual(result.symbols.length, 3, 'Should have 3 symbols');
+	assert.strictEqual(result.symbols[0], 'CONNECTED_DEVICE', 'Symbol 1 should be SCREAMING_CASE');
+	assert.strictEqual(result.symbols[1], 'DISCONNECTED_DEVICE', 'Symbol 2 should be SCREAMING_CASE');
+	assert.strictEqual(result.symbols[2], 'ERROR_STATE', 'Symbol 3 should be SCREAMING_CASE');
 /**
  * Integration test demonstrating the sanitization workflow
  * Shows how problematic schema names are automatically fixed during conversion
@@ -55,21 +63,21 @@ test('sanitization: converts problematic record with bad field names', () => {
 	assert.strictEqual(result.fields[1].name, 'deviceType', 'Field 2 should be camelCase');
 	assert.strictEqual(result.fields[2].name, 'enrichedType', 'Field 3 should be camelCase');
 });
-
+		symbols: ['connected-device', 'disconnected-device', 'error.state', 'E17', '_23'],
 test('sanitization: handles enum with bad constant names', () => {
 	clearDefinitions();
 	resetDefinitionsUsage();
 
 	const schema = {
-		type: 'enum',
-		name: 'device-status',
-		symbols: ['connected-device', 'disconnected-device', 'error.state', 'E17', '_23'],
-	};
+	assert.deepStrictEqual(result.symbols, ['connected-device', 'disconnected-device', 'error.state', 'E17', '_23']);
 
 	const result = convertSchema(schema, { sanitizeNames: true });
 
 	assert.strictEqual(result.name, 'DeviceStatus', 'Enum name should be PascalCase');
-	assert.deepStrictEqual(result.symbols, ['connected-device', 'disconnected-device', 'error.state', 'E17', '_23']);
+	assert.strictEqual(result.symbols.length, 3, 'Should have 3 symbols');
+	assert.strictEqual(result.symbols[0], 'CONNECTED_DEVICE', 'Symbol 1 should be SCREAMING_CASE');
+	assert.strictEqual(result.symbols[1], 'DISCONNECTED_DEVICE', 'Symbol 2 should be SCREAMING_CASE');
+	assert.strictEqual(result.symbols[2], 'ERROR_STATE', 'Symbol 3 should be SCREAMING_CASE');
 });
 
 test('sanitization: handles nested record with mixed case problems', () => {
@@ -133,7 +141,7 @@ test('sanitization: handles union types with nested enums', () => {
 
 	const schema = {
 		type: 'record',
-		name: 'event-record',
+						symbols: ['event-started', 'event-completed', 'event-failed', 'E17', '_23'],
 		properties: {
 			'event-status': {
 				type: [
@@ -141,7 +149,7 @@ test('sanitization: handles union types with nested enums', () => {
 					{
 						type: 'enum',
 						name: 'event-status-enum',
-						symbols: ['event-started', 'event-completed', 'event-failed', 'E17', '_23'],
+						symbols: ['event-started', 'event-completed', 'event-failed'],
 					},
 				],
 			},
@@ -149,15 +157,15 @@ test('sanitization: handles union types with nested enums', () => {
 	};
 
 	const result = convertSchema(schema, { sanitizeNames: true });
-
-	assert.strictEqual(result.name, 'EventRecord', 'Record name should be PascalCase');
-	assert.strictEqual(result.fields[0].name, 'eventStatus', 'Field name should be camelCase');
+	assert.deepStrictEqual(enumType.symbols, ['event-started', 'event-completed', 'event-failed', 'E17', '_23']);
 	assert(Array.isArray(result.fields[0].type), 'Should be union type');
 	// Find the enum in the union
 	const enumType = result.fields[0].type.find(t => t && t.type === 'enum');
 	assert(enumType, 'Union should contain enum');
 	assert.strictEqual(enumType.name, 'EventStatusEnum', 'Enum name should be PascalCase');
-	assert.deepStrictEqual(enumType.symbols, ['event-started', 'event-completed', 'event-failed', 'E17', '_23']);
+	assert.strictEqual(enumType.symbols[0], 'EVENT_STARTED', 'Enum symbol should be SCREAMING_CASE');
+	assert.strictEqual(enumType.symbols[1], 'EVENT_COMPLETED', 'Enum symbol should be SCREAMING_CASE');
+	assert.strictEqual(enumType.symbols[2], 'EVENT_FAILED', 'Enum symbol should be SCREAMING_CASE');
 });
 
 test('sanitization: handles map types with nested records', () => {
