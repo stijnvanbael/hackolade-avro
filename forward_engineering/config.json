@@ -86,7 +86,7 @@
 		},
 		{
 			"id": "INCLUDE_FIELD_SAMPLES",
-			"value": false,
+			"value": true,
 			"name": "Include field sample in schema"
 		},
 		{
