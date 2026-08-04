@@ -97,14 +97,9 @@ const sanitizeSchema = (schema, isFieldContext = false) => {
 		}
 	}
 
-	// Sanitize enum names and symbols
+	// Sanitize enum names but keep symbols as-is
 	if (sanitized.type === 'enum' && sanitized.name) {
 		sanitized.name = sanitizeTypeName(sanitized.name);
-
-		// Sanitize enum symbols (constants)
-		if (sanitized.symbols && Array.isArray(sanitized.symbols)) {
-			sanitized.symbols = sanitized.symbols.map(symbol => sanitizeEnumConstant(symbol));
-		}
 	}
 
 	// Sanitize fixed names
